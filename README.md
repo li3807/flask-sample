@@ -300,8 +300,220 @@ footer {
     height: 100px;
 }
 ```
+
 接着在页面的 <head> 标签内引入这个 CSS 文件：
+
 ```html
 
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
 ```
+
+# 第四章 模板优化
+
+## 自定义错误页面
+
+目前的程序中，如果你访问一个不存在的 URL，比如 /hello，Flask 会自动返回一个 404 错误响应。默认的错误页面非常简陋。在 Flask
+程序中自定义错误页面非常简单，我们先编写一个 404 错误页面模板，在 templates 目录下创建 errors 目录，并创建 404.html
+文件，如下所示：
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>404 's Watchlist</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
+</head>
+<body>
+<h2>
+    <img alt="Avatar" class="avatar" src="{{ url_for('static', filename='images/avatar.png') }}">
+    404 's Watchlist
+</h2>
+<ul class="movie-list">
+    <li>
+        Page Not Found - 404
+        <span class="float-right">
+                <a href="{{ url_for('index') }}">Go Back</a>
+            </span>
+    </li>
+</ul>
+<footer>
+    <small>&copy; 2018 <a href="http://helloflask.com/book/3">HelloFlask</a></small>
+</footer>
+</body>
+</html>
+```
+
+接着使用 app.errorhandler() 装饰器注册一个错误处理函数，它的作用和视图函数类似，当 404 错误发生时，这个函数会被触发，返回值会作为响应主体返回给客户端：
+
+```python
+@app.errorhandler(404)  # 传入要处理的错误代码
+def page_not_found(e):  # 接受异常对象作为参数
+    return render_template('404.html'), 404  # 返回模板和状态码
+```
+
+## 模板上下文处理函数
+
+错误页面模板和主页模板有大量重复的代码，比如 <head>
+标签的内容，页首的标题，页脚信息等。这种重复不仅带来不必要的工作量，而且会让修改变得更加麻烦。举例来说，如果页脚信息需要更新，那么每个页面都要一一进行修改。
+显而易见，这个问题有更优雅的处理方法，模板上下文处理函数。
+对于多个模板内都需要使用的变量，我们可以使用 app.context_processor 装饰器注册一个模板上下文处理函数，如下所示：
+
+```python
+class UserModel:
+    name = "li"
+
+
+@app.context_processor
+def inject_user():  # 函数名可以随意修改
+    user = UserModel()
+    return dict(user=user)  # 需要返回字典，等同于 return {'user': user}
+```
+
+修改 404.html 模板页面，可以直接试用 user 变量
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{user.name}} 's Watchlist</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
+</head>
+<body>
+<h2>
+    <img alt="Avatar" class="avatar" src="{{ url_for('static', filename='images/avatar.png') }}">
+    {{user.name}}'s Watchlist
+</h2>
+<ul class="movie-list">
+    <li>
+        Page Not Found - 404
+        <span class="float-right">
+                <a href="{{ url_for('index') }}">Go Back</a>
+            </span>
+    </li>
+</ul>
+<footer>
+    <small>&copy; 2018 <a href="http://helloflask.com/book/3">HelloFlask</a></small>
+</footer>
+</body>
+</html>
+```
+
+## 使用模板继承来组织模板
+
+对于模板内容重复的问题，Jinja2 提供了模板继承的支持。这个机制和 Python 类继承非常类似：我们可以定义一个父模板，一般会称之为基模板（base
+template）。基模板中包含完整的 HTML 结构和导航栏、页首、页脚等通用部分。在子模板里，我们可以使用 extends 标签来声明继承自某个基模板。
+
+基模板中需要在实际的子模板中追加或重写的部分则可以定义成块（block）。块使用 block 标签创建， {% block 块名称 %} 作为开始标记，{%
+endblock %} 或 {% endblock 块名称 %} 作为结束标记。通过在子模板里定义一个同样名称的块，你可以向基模板的对应块位置追加或重写内容。
+
+### 编写基模板
+
+在基模板里，我们添加了两个块，一个是包含 <head></head> 内容的 head 块，另一个是用来在子模板中插入页面主体内容的 content
+块。在复杂的项目里，你可以定义更多的块，方便在子模板中对基模板的各个部分插入内容。另外，块的名字没有特定要求，你可以自由修改。
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% block head %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ user.name }}'s Watchlist</title>
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
+    {% endblock head%}
+</head>
+<body>
+<h2>
+    <img alt="Avatar" class="avatar" src="{{ url_for('static', filename='images/avatar.png') }}">
+    {{ user.name }}'s Watchlist
+</h2>
+<nav>
+    <ul>
+        <li><a href="{{ url_for('index') }}">Home</a></li>
+    </ul>
+</nav>
+{% block content %}
+{% endblock content%}
+<footer>
+    <small>&copy; 2018 <a href="http://helloflask.com/book/3">HelloFlask</a></small>
+</footer>
+</body>
+</html>
+```
+
+> 因为基模板会被所有其他页面模板继承，如果你在基模板中使用了某个变量，那么这个变量也需要使用模板上下文处理函数注入到模板里。
+
+### 编写子模板
+
+创建了基模板后，子模板的编写会变得非常简单。下面是新的主页模板（index.html）
+
+```html
+{% extends 'base/base.html' %}
+
+{% block content %}
+<p>{{ movies|length }} Titles</p>
+<ul class="movie-list">
+    {% for movie in movies %}
+    <li>{{ movie.title }} - {{ movie.year }}
+        <span class="float-right">
+            <a class="imdb" href="https://www.imdb.com/find?q={{ movie.title }}" target="_blank"
+               title="Find this movie on IMDb">IMDb</a>
+        </span>
+    </li>
+    {% endfor %}
+</ul>
+<img alt="Walking Totoro" class="totoro" src="{{ url_for('static', filename='images/totoro.gif') }}" title="to~to~ro~">
+{% endblock content%}
+```
+
+第一行使用 extends 标签声明扩展自模板 base.html，可以理解成“这个模板继承自 base.html“，接着我们定义了 content
+块，这里的内容会插入到基模板中 content 块的位置。
+> 默认的块重写行为是覆盖，如果你想向父块里追加内容，可以在子块中使用 super() 声明，即 {{ super() }}
+
+404 错误页面的模板类似，如下所示:
+
+```html
+{% extends 'base/base.html' %}
+
+{% block content %}
+<ul class="movie-list">
+    <li>
+        Page Not Found - 404
+        <span class="float-right">
+            <a href="{{ url_for('index') }}">Go Back</a>
+        </span>
+    </li>
+</ul>
+{% endblock content%}
+```
+
+# 第五章 表单
+
+在 HTML 页面里，我们需要编写表单来获取用户输入。一个典型的表单如下所示：
+
+```html
+
+<form method="post">  <!-- 指定提交方法为 POST -->
+    <label for="name">名字</label>
+    <input type="text" name="name" id="name"><br>  <!-- 文本输入框 -->
+    <label for="occupation">职业</label>
+    <input type="text" name="occupation" id="occupation"><br>  <!-- 文本输入框 -->
+    <input type="submit" name="submit" value="登录">  <!-- 提交按钮 -->
+</form>
+```
+
+编写表单的 HTML 代码有下面几点需要注意：
+
+- 在 ```<form>``` 标签里使用 method 属性将提交表单数据的 HTTP 请求方法指定为 POST。如果不指定，则会默认使用 GET
+  方法，这会将表单数据通过 URL 提交，容易导致数据泄露，而且不适用于包含大量数据的情况。
+- ```<input>``` 元素必须要指定 name 属性，否则无法提交数据，在服务器端，我们也需要通过这个 name 属性值来获取对应字段的数据
+
+> 填写输入框标签文字的 <label> 元素不是必须的，只是为了辅助鼠标用户。当使用鼠标点击标签文字时，会自动激活对应的输入框，这对复选框来说比较有用。for 属性填入要绑定的 ```<input>``` 元素的 id 属性值。
+
+## 创建新条目
+创建新条目可以放到一个新的页面来实现，创建 create.html 并继承 base.html 在里面添加一个表单：
