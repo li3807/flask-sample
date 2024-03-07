@@ -1,9 +1,17 @@
 import os
 
 from flask import Flask, render_template, request, flash, redirect, url_for
+from flask_bootstrap import Bootstrap5
+from flask_wtf import CSRFProtect
+
+from chapter1.login import LoginUserForm
 
 app = Flask(__name__)
+bootstrap = Bootstrap5(app)
+csrf = CSRFProtect(app)
 app.config['SECRET_KEY'] = os.urandom(24)
+app.config['BOOTSTRAP_BTN_STYLE'] = 'primary'
+app.config['BOOTSTRAP_BTN_SIZE'] = 'sm'
 
 name = 'Grey Li'
 movies = [
@@ -49,7 +57,7 @@ def create():
         # TODO:保存表单数据到数据库
         # 显示成功创建的提示
         flash('Item created.')
-        return redirect(url_for('create'))  # 重定向回主页
+        return redirect(url_for('create'))
 
 
 @app.context_processor
@@ -63,6 +71,22 @@ def inject_user():
 def page_not_found(e):
     """接收异常对象做为参数"""
     return render_template('errors/404.html'), 404  # 返回模板和状态码
+
+
+@app.route('/login', methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        form = LoginUserForm()
+        form.meta.csrf = True
+        return render_template("login.html", form=form)
+    else:
+        form = LoginUserForm(formdata=request.form)
+        if form.validate():  # 对用户提交数据进行校验，form.data是校验完成后的数据字典
+            print("用户提交的数据用过格式验证，值为：%s" % form.data)
+            return "登录成功"
+        else:
+            print(form.errors, "错误信息")
+        return render_template("login.html", form=form)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,29 @@
+{% extends 'base/base.html' %}
+{% block content %}
+{% for field,err in form.errors.items() %}-->
+{% for e in err %}
+<div class="alert">{{field}}:{{ e }}</div>
+{% endfor%}
+{% endfor%}
+{{ render_form(form) }}
+<!--<form method="post">-->
+<!--    {% for field,err in form.errors.items() %}-->
+<!--    {% for e in err %}-->
+<!--    <div class="alert">{{field}}:{{ e }}</div>-->
+<!--    {% endfor%}-->
+<!--    {% endfor%}-->
+
+<!--    {{ render_form(form) }}-->
+
+<!--    &lt;!&ndash;    <p>{{form.email.label}} {{form.email}}</p>&ndash;&gt;-->
+<!--    &lt;!&ndash;    <p>{{form.password.label}} {{form.password}} </p>&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.boolean.label}} {{form.boolean}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.date.label}} {{form.date}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.dateTime.label}} {{form.dateTime}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.range.label}} {{form.range}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.radio.label}} {{form.radio}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;&lt;!&ndash;    <p>{{form.file.label}} {{form.file}} </p>&ndash;&gt;&ndash;&gt;-->
+<!--    &lt;!&ndash;    <p>{{form.submit}} </p>&ndash;&gt;-->
+
+<!--</form>-->
+{% endblock %}

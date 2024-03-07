@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% from 'bootstrap5/form.html' import render_form %}
 <html lang="en">
 <head>
     {% block head %}
@@ -6,10 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ user.name }}'s Watchlist</title>
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">
+<!--    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" type="text/css">-->
+    {{bootstrap.load_css()}}
     {% endblock head%}
 </head>
 <body>
+{{bootstrap.load_js()}}
 <h2>
     <img alt="Avatar" class="avatar" src="{{ url_for('static', filename='images/avatar.png') }}">
     {{ user.name }}'s Watchlist

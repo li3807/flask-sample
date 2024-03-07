@@ -513,7 +513,295 @@ endblock %} 或 {% endblock 块名称 %} 作为结束标记。通过在子模板
   方法，这会将表单数据通过 URL 提交，容易导致数据泄露，而且不适用于包含大量数据的情况。
 - ```<input>``` 元素必须要指定 name 属性，否则无法提交数据，在服务器端，我们也需要通过这个 name 属性值来获取对应字段的数据
 
-> 填写输入框标签文字的 <label> 元素不是必须的，只是为了辅助鼠标用户。当使用鼠标点击标签文字时，会自动激活对应的输入框，这对复选框来说比较有用。for 属性填入要绑定的 ```<input>``` 元素的 id 属性值。
+> 填写输入框标签文字的 <label> 元素不是必须的，只是为了辅助鼠标用户。当使用鼠标点击标签文字时，会自动激活对应的输入框，这对复选框来说比较有用。for
+> 属性填入要绑定的 ```<input>``` 元素的 id 属性值。
 
 ## 创建新条目
+
 创建新条目可以放到一个新的页面来实现，创建 create.html 并继承 base.html 在里面添加一个表单：
+
+```html
+{% extends 'base/base.html' %}
+{% block content %}
+{% for message in get_flashed_messages() %}
+<div class="alert">{{ message }}</div>
+{% endfor %}
+<form method="post" action="/create">
+    Name <input type="text" name="title" autocomplete="off" required>
+    Year <input type="text" name="year" autocomplete="off" required>
+    <input class="btn" type="submit" name="submit" value="Add">
+</form>
+{% endblock%}
+```
+
+在这两个输入字段中，autocomplete 属性设为 off 来关闭自动完成（按下输入框不显示历史输入记录）；另外还添加了 required
+标志属性，如果用户没有输入内容就按下了提交按钮，浏览器会显示错误提示。
+
+### 处理表单数据
+
+默认情况下，当表单中的提交按钮被按下，浏览器会创建一个新的请求，默认发往当前 URL（在 <form> 元素使用 action 属性可以自定义目标
+URL）,我们需要创建 create 的路由地址：
+
+```python
+@app.route('/create', methods=['GET', 'POST'])
+def create():
+    # 表示GET 请求
+    if request.method == 'GET':
+        return render_template("create.html")
+    # 表示 POST 请求
+    else:
+        # 获取表单数据
+        title = request.form.get('title')  # 传入表单对应输入字段的 name 值
+        year = request.form.get('year')
+        # 验证数据
+        if not title or not year or len(year) > 4 or len(title) > 60:
+            flash('Invalid input1.')  # 显示错误提示
+            flash('Invalid input2.')  # 显示错误提示
+            return redirect(url_for('create'))
+
+        # TODO:保存表单数据到数据库
+        # 显示成功创建的提示
+        flash('Item created.')
+        return redirect(url_for('create'))  
+```
+
+为了能够处理 POST 请求，在使用 ```@app.route ```装饰器，增加 methods 属性，配置为 ['GET', 'POST'] 表示支持GET 和 POST 请求。
+两种方法的请求有不同的处理逻辑：对于 GET 请求，返回渲染后的页面；对于 POST 请求，则获取提交的表单数据并保存。为了在函数内加以区分，我们添加一个
+if 判断处理。
+
+### 请求对象
+
+Flask 会在请求触发后把请求信息放到 request 对象里，你可以从 flask 包导入它：
+
+```python
+from flask import request
+```
+
+因为它在请求触发时才会包含数据，所以你只能在视图函数内部调用它。它包含请求相关的所有信息:
+
+- 请求的路径（request.path）
+- 请求的方法（request.method）
+- 表单数据（request.form）
+- 查询字符串（request.args）等等
+
+我们首先通过 request.method 的值来判断请求方法。在 if 语句内，我们通过 request.form 来获取表单数据。request.form
+是一个特殊的字典，用表单字段的 name 属性值可以获取用户填入的对应数据。
+
+在用户执行某些动作后，我们通常在页面上显示一个提示消息。最简单的实现就是在视图函数里定义一个包含消息内容的变量，传入模板，然后在模板里渲染显示它。因为这个需求很常用，Flask
+内置了相关的函数。其中 flash() 函数用来在视图函数里向模板传递提示消息，get_flashed_messages() 函数则用来在模板中获取提示消息。
+flash() 的用法很简单，首先从 flask 包导入 flash 函数：
+
+```python
+from flask import flash
+```
+
+然后在视图函数里调用，传入要显示的消息内容：
+
+```python
+flash('Item Created.')
+```
+
+flash() 函数在内部会把消息存储到 Flask 提供的 session 对象里。session 用来在请求间存储数据，它会把数据签名后存储到浏览器的
+Cookie 中，所以我们需要设置签名所需的密钥：
+
+```python
+import os
+
+app.config['SECRET_KEY'] = os.urandom(24)
+```
+
+> 提示：这个密钥的值在开发时可以随便设置。基于安全的考虑，在部署时应该设置为随机字符，且不应该明文写在代码里。
+
+下面在模板（create.html）里使用 get_flashed_messages() 函数获取提示消息并显示:
+
+```html
+{% for message in get_flashed_messages() %}
+<div class="alert">{{ message }}</div>
+{% endfor %}
+```
+
+通过在 ```<input>``` 元素内添加 required 属性实现的验证（客户端验证）并不完全可靠，我们还要在服务器端追加验证：
+
+```python
+if not title or not year or len(year) != 4 or len(title) > 60:
+    flash('Invalid input.')  # 显示错误提示
+    return redirect(url_for('index'))
+# ...
+flash('Item created.')  # 显示成功创建的提示
+```
+
+> 提示：在正常系统开发时，会进行更严苛的验证，比如对数据去除首尾的空格。一般情况下，我们会使用第三方库（比如
+> WTForms）来实现表单数据的验证工作。
+
+### 重定向响应
+
+重定向响应是一类特殊的响应，它会返回一个新的 URL，浏览器在接受到这样的响应后会向这个新 URL 再次发起一个新的请求。Flask
+提供了 ```redirect()``` 函数来快捷生成这种响应，传入重定向的目标 URL 作为参数，比如 redirect('http://helloflask.com')。
+
+根据验证情况，我们发送不同的提示消息，最后都把页面重定向到 create 页面，这里的主页 URL 均使用 url_for() 函数生成：
+
+```python
+  # 验证数据
+if not title or not year or len(year) > 4 or len(title) > 60:
+    flash('Invalid input1.')  # 显示错误提示
+    flash('Invalid input2.')  # 显示错误提示
+    return redirect(url_for('create'))
+...
+# 显示成功创建的提示
+flash('Item created.')
+return redirect(url_for('create'))
+```
+
+# 常用扩展
+
+## WTForms
+
+在 Flask 内部并没有提供全面的表单验证，所以当我们不借助第三方插件来处理时候代码会显得混乱，而官方推荐的一个表单验证插件就是
+WTForms。WTForms主要用于对用户请求数据的进行验证。
+
+### 安装 WTForms
+
+使用 pip 执行 install wtforms 命令执行安装，如果需要支持email格式验证，还需要安装 email_validator
+
+```bash
+$ pip install wtforms
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting wtforms
+  Using cached https://pypi.tuna.tsinghua.edu.cn/packages/18/19/c3232f35e24dccfad372e9f341c4f3a1166ae7c66e4e1351a9467c921cc1/wtforms-3.1.2-py3-none-any.whl (145 kB)
+Requirement already satisfied: markupsafe in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from wtforms) (2.1.5)
+Installing collected packages: wtforms
+Successfully installed wtforms-3.1.2
+
+$ pip install email_validator
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting email_validator
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/e4/60/b02cb0f5ee0be88bd4fbfdd9cc91e43ec2dfcc47fe064e7c70587ff58a94/email_validator-2.1.1-py3-none-any.whl (30 kB)
+Collecting dnspython>=2.0.0 (from email_validator)
+  Using cached https://pypi.tuna.tsinghua.edu.cn/packages/87/a1/8c5287991ddb8d3e4662f71356d9656d91ab3a36618c3dd11b280df0d255/dnspython-2.6.1-py3-none-any.whl (307 kB)
+Collecting idna>=2.0.0 (from email_validator)
+  Using cached https://pypi.tuna.tsinghua.edu.cn/packages/c2/e7/a82b05cf63a603df6e68d59ae6a68bf5064484a0718ea5033660af4b54a9/idna-3.6-py3-none-any.whl (61 kB)
+Installing collected packages: idna, dnspython, email_validator
+Successfully installed dnspython-2.6.1 email_validator-2.1.1 idna-3.6
+
+```
+
+### 定义表单
+
+使用Wtforms 进行表单验证，需要定义表单类，继承于 wtforms.Form 声明表单字段类型和验证规则等，支持的表单字段有：
+
+- StringField: 字符串字段，使用 input 标签
+- PasswordField：密码字段，使用 input 标签其类型为 password
+- BooleanField：复选框，使用 input 标签其类型为 checkbox
+- EmailField：电子邮箱字段，使用 input 标签其类型为 email
+- RadioField：单选字段，使用 select 标签
+- SelectField：选择字段，使用 select 标签
+- FileField：文件上传字段，使用 input 标签其类型为 file
+- SubmitField：提交表单按钮字段
+- 等等，查看[官方文档](https://wtforms.readthedocs.io/en/3.1.x/fields/)
+
+表单字段一般属性：
+
+- name: 此字段的HTML表单名称。这是在表单中定义的名称，加上传递给表单构造函数的前缀。
+- short_name: 该字段的无前缀名称。
+- id:该字段的HTML ID。如果未指定，则为您生成与字段名称相同的名称。
+- label:标签可以打印成HTML标签，当作为字符串计算时返回一个HTML结构。```<label for="id">```
+- default:设置表单字段的默认值
+- description：字段的描述，一般用于帮助文本
+- errors：包含此字段的验证错误的列表
+- process_errors：输入处理过程中获得的错误。在验证时，这些错误将被添加到错误列表中
+- widget：负责渲染网页上HTML表单的输入元素和提取提交的原始数据。widget是字段的一个内在属性，用于定义字段在浏览器的页面里以何种HTML元素展现。
+- type：该字段的类型，以字符串形式表示。这可以在你的模板中使用，根据字段的类型做逻辑。
+- flags：包含由字段本身或字段上的验证器设置的标志的对象。例如，InputRequired，未设置标志将导致 None
+- meta：表单的元素据
+    - csrf = False，将 csrf 设置为True将为表单启用 csrf。该值也可以通过实例化时定制来覆盖每个实例(
+      例如，如果csrf只在特殊情况下需要关闭)。
+    - csrf_field_name = 'csrf_token'，自动添加的 csrf 令牌字段的名称。
+    - 等等，详细查看[官方文档](https://wtforms.readthedocs.io/en/3.1.x/meta/)
+- filters：与传递给字段构造函数的过滤器序列相同。
+
+```python
+from wtforms import Form, StringField, validators, PasswordField, SubmitField
+
+
+class LoginUserForm(Form):
+    email = StringField('登陆邮箱',
+                        validators=[validators.data_required(), validators.email(message="请输入注册的邮箱地址")])
+    password = PasswordField('登录密码', validators=[validators.data_required(),
+                                                     validators.length(min=8, max=12, message="密码最少8位，最多12位。")])
+    submit = SubmitField("登录")
+```
+
+```python
+@app.route('/login', methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        form = LoginUserForm()
+        return render_template("login.html", form=form)
+    else:
+        form = LoginUserForm(formdata=request.form)
+        if form.validate():  # 对用户提交数据进行校验，form.data是校验完成后的数据字典
+            print("用户提交的数据用过格式验证，值为：%s" % form.data)
+            return "登录成功"
+        else:
+            print(form.errors, "错误信息")
+        return render_template("login.html", form=form)
+```
+
+```html
+{% extends 'base/base.html' %}
+{% block content %}
+<form method="post">
+    {% for field,err in form.errors.items() %}
+    {% for e in err %}
+    <div class="alert">{{field}}:{{ e }}</div>
+    {% endfor%}
+    {% endfor%}
+    <p>{{form.email.label}} {{form.email}}</p>
+    <p>{{form.password.label}} {{form.password}} </p>
+    <p>{{form.submit}} </p>
+
+</form>
+{% endblock %}
+```
+
+## Bootstrap-Flask
+
+Bootstrap-Flask 是 Bootstrap 和 Flask 的 Jinja 宏集合。它可以帮助您 更轻松地将与 Flask 相关的数据和对象呈现为 Bootstrap
+HTML标签。
+
+### 安装 Bootstrap-Flask
+使用 pip 执行 install bootstrap-flask flask-wtf 命令安装 
+```bash
+$ pip install bootstrap-flask
+Looking in indexes: https://pypi.tuna.tsinghua.edu.cn/simple
+Collecting bootstrap-flask
+  Downloading https://pypi.tuna.tsinghua.edu.cn/packages/95/e4/7f3dd2dba1ef70ddbf1bf6a58ea8245c20b2d44bd81e8b37215e812f5d0e/Bootstrap_Flask-2.3.3-py2.py3-none-any.whl (3.9 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.9/3.9 MB 1.5 MB/s eta 0:00:00
+Requirement already satisfied: Flask in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from bootstrap-flask) (3.0.2)
+Requirement already satisfied: WTForms in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from bootstrap-flask) (3.1.2)
+Requirement already satisfied: Werkzeug>=3.0.0 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from Flask->bootstrap-flask) (3.0.1)
+Requirement already satisfied: Jinja2>=3.1.2 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from Flask->bootstrap-flask) (3.1.3)
+Requirement already satisfied: itsdangerous>=2.1.2 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from Flask->bootstrap-flask) (2.1.2)
+Requirement already satisfied: click>=8.1.3 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from Flask->bootstrap-flask) (8.1.7)
+Requirement already satisfied: blinker>=1.6.2 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from Flask->bootstrap-flask) (1.7.0)
+Requirement already satisfied: markupsafe in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from WTForms->bootstrap-flask) (2.1.5)
+Requirement already satisfied: colorama in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from click>=8.1.3->Flask->bootstrap-flask) (0.4.6)
+Installing collected packages: bootstrap-flask
+Successfully installed bootstrap-flask-2.3.3
+
+Collecting flask-wtf
+  Using cached https://pypi.tuna.tsinghua.edu.cn/packages/02/2b/0f0cf68a2f052ea3dbb8b6c8c2a7e8aea5e6df7410f5e289437fefbeb461/flask_wtf-1.2.1-py3-none-any.whl (12 kB)
+Requirement already satisfied: flask in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask-wtf) (3.0.2)
+Requirement already satisfied: itsdangerous in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask-wtf) (2.1.2)
+Requirement already satisfied: wtforms in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask-wtf) (3.1.2)
+Requirement already satisfied: Werkzeug>=3.0.0 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask->flask-wtf) (3.0.1)
+Requirement already satisfied: Jinja2>=3.1.2 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask->flask-wtf) (3.1.3)
+Requirement already satisfied: click>=8.1.3 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask->flask-wtf) (8.1.7)
+Requirement already satisfied: blinker>=1.6.2 in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from flask->flask-wtf) (1.7.0)
+Requirement already satisfied: markupsafe in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from wtforms->flask-wtf) (2.1.5)
+Requirement already satisfied: colorama in c:\users\develop\anaconda3\envs\flask-dev\lib\site-packages (from click>=8.1.3->flask->flask-wtf) (0.4.6)
+Installing collected packages: flask-wtf
+Successfully installed flask-wtf-1.2.1
+```
+
+### 初始化
